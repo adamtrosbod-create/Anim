@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Anime Kingdom | مملكة الأنمي المطورة</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root {
+            --p: #bc13fe; --b: #4632ff; 
+            --bg: #f5f7f8; --card: #ffffff;
+            --text: #1a1a1a; --danger: #ff4d4d;
+            --grad: linear-gradient(45deg, var(--p), var(--b));
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; height: 100vh; overflow: hidden; }
+        
+        #loader { position: fixed; inset: 0; background: #fff; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--p); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .auth-screen { position: fixed; inset: 0; background: #fff; z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .card-ui { background: #fff; border-radius: 30px; width: 100%; max-width: 400px; text-align: center; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid #eee; }
+        
+        .inp { width: 100%; padding: 15px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 15px; margin-bottom: 12px; }
+        .btn-main { width: 100%; padding: 15px; background: var(--grad); border: none; color: #fff; border-radius: 15px; font-weight: bold; cursor: pointer; }
+        .btn-sec { background: none; border: none; color: #666; margin-top: 10px; cursor: pointer; font-size: 14px; }
+
+        .user-list { max-height: 150px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #eee; border-radius: 10px; }
+        .user-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #f9f9f9; cursor: pointer; }
+        .user-item img { width: 35px; height: 35px; border-radius: 50%; margin-left: 10px; }
+
+        .page { display: none; height: 100vh; flex-direction: column; padding-bottom: 80px; }
+        .page.active { display: flex !important; }
+        
+        header { height: 60px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: center; position: sticky; top: 0; z-index: 100; }
+        header b { color: var(--p); font-size: 20px; }
+
+        .feed { flex: 1; overflow-y: auto; padding: 12px; }
+
+        /* تعديل الإطار المتدرج للمنشور */
+        .post { 
+            background: var(--card); 
+            border-radius: 20px; 
+            margin-bottom: 20px; 
+            overflow: hidden; 
+            position: relative; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 3px solid transparent;
+            background-image: linear-gradient(var(--card), var(--card)), var(--grad);
+            background-origin: border-box;
+            background-clip: content-box, border-box;
+        }
+
+        .post-h { padding: 12px; display: flex; align-items: center; gap: 10px; }
+        .post-h img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--p); object-fit: cover; }
+        .delete-btn { margin-right: auto; color: var(--danger); background: none; border: none; font-size: 18px; cursor: pointer; }
+
+        .post-m { width: 100%; display: block; max-height: 400px; object-fit: contain; background: #000; }
+        .post-f { padding: 10px; display: flex; gap: 15px; border-top: 1px solid #f9f9f9; }
+        .btn-act { background: none; border: none; color: #555; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; }
+        
+        .c-section { background: #fafafa; border-top: 1px solid #eee; padding: 12px; display: none; }
+        .c-list { max-height: 150px; overflow-y: auto; margin-bottom: 8px; }
+        .c-item { font-size: 13px; margin-bottom: 5px; background: #fff; padding: 8px; border-radius: 10px; border: 1px solid #eee; }
+        .c-item b { color: var(--p); }
+
+        .chat-msg { display: flex; gap: 10px; margin-bottom: 15px; max-width: 85%; }
+        .chat-msg img { width: 35px; height: 35px; border-radius: 50%; }
+        .msg-c { background: #e9ecef; padding: 10px; border-radius: 15px; font-size: 14px; }
+        .my-msg { align-self: flex-end; flex-direction: row-reverse; }
+        .my-msg .msg-c { background: var(--grad); color: #fff; }
+
+        nav { position: fixed; bottom: 0; width: 100%; height: 70px; background: #fff; border-top: 1px solid #eee; display: flex; align-items: center; z-index: 1000; }
+        .tab { color: #999; text-align: center; flex: 1; font-size: 11px; cursor: pointer; }
+        .tab.on { color: var(--p); font-weight: bold; }
+        .tab i { font-size: 22px; display: block; }
+        .btn-round { width: 45px; height: 45px; border-radius: 50%; background: var(--grad); color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center; margin: -25px auto 5px; border: 3px solid #fff; }
+
+        #up-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: none; align-items: center; justify-content: center; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="loader"><div class="spinner"></div><b>جاري الدخول...</b></div>
+
+    <div id="auth-choice" class="auth-screen">
+        <div class="card-ui">
+            <h1 style="color:var(--p); margin-bottom:20px;">عالم الأوتاكو 🏯</h1>
+            <button class="btn-main" onclick="showAuth('register')">إنشاء حساب جديد</button>
+            <button class="btn-sec" onclick="showAuth('login')">لدي حساب بالفعل</button>
+        </div>
+    </div>
+
+    <div id="auth-register" class="auth-screen">
+        <div class="card-ui">
+            <h2>عضو جديد ⚔️</h2>
+            <div onclick="document.getElementById('pfp-inp').click()" style="width:80px; height:80px; border-radius:50%; background:#f0f0f0; border:2px dashed var(--p); margin:15px auto; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer;">
+                <img id="pfp-pre" style="width:100%; height:100%; object-fit:cover; display:none;">
+                <span id="pfp-icon">📷</span>
+            </div>
+            <input type="file" id="pfp-inp" hidden accept="image/*">
+            <input type="text" id="reg-name" class="inp" placeholder="الاسم المستعار">
+            <input type="password" id="reg-pass" class="inp" placeholder="كلمة المرور">
+            <button class="btn-main" onclick="register()">تسجيل الحساب</button>
+            <button class="btn-sec" onclick="showAuth('choice')">إلغاء</button>
+        </div>
+    </div>
+
+    <div id="auth-login" class="auth-screen">
+        <div class="card-ui">
+            <h2>عودة البطل 🏰</h2>
+            <input type="text" id="login-search" class="inp" placeholder="ابحث عن اسمك..." oninput="searchUsers(this.value)">
+            <div id="user-results" class="user-list"></div>
+            <div id="pass-area" style="display:none;">
+                <p id="sel-name" style="margin-bottom:10px; font-weight:bold; color:var(--p);"></p>
+                <input type="password" id="login-pass" class="inp" placeholder="كلمة المرور">
+                <button class="btn-main" onclick="login()">دخول</button>
+            </div>
+            <button class="btn-sec" onclick="showAuth('choice')">رجوع</button>
+        </div>
+    </div>
+
+    <div id="p-home" class="page">
+        <header><b>المنشورات ⛩️</b></header>
+        <div id="f-all" class="feed"></div>
+    </div>
+
+    <div id="p-chat" class="page">
+        <header><b>الدردشة 💬</b></header>
+        <div id="chat-f" class="feed" style="display:flex; flex-direction:column;"></div>
+        <div style="padding:10px; display:flex; gap:8px; background:#fff; border-top:1px solid #eee;">
+            <input type="text" id="msg-inp" class="inp" style="margin-bottom:0;" placeholder="اكتب شيئاً...">
+            <button onclick="sendMsg()" class="btn-main" style="width:65px;">إرسال</button>
+        </div>
+    </div>
+
+    <div id="p-prof" class="page">
+        <header><b>ملفي 👤</b></header>
+        <div style="text-align:center; padding:20px; background:#fff;">
+            <img id="my-img" src="" style="width:80px; height:80px; border-radius:50%; border:3px solid var(--p);">
+            <h2 id="my-name" style="margin-top:5px;"></h2>
+            <div style="margin:10px 0; font-weight:bold; color:var(--b);">⭐ النقاط: <span id="total-likes">0</span></div>
+            <button onclick="logout()" style="color:red; border:none; background:none; font-size:12px; cursor:pointer;">تسجيل الخروج</button>
+        </div>
+        <div id="f-me" class="feed"></div>
+    </div>
+
+    <div id="up-overlay">
+        <div class="card-ui">
+            <div id="up-pre" style="width:100%; height:150px; background:#eee; border-radius:15px; overflow:hidden; margin-bottom:10px;"></div>
+            <textarea id="up-txt" class="inp" style="height:80px;" placeholder="اكتب وصفاً..."></textarea>
+            <button id="up-btn" class="btn-main" onclick="publish()">نشر 🔥</button>
+            <button onclick="closeUp()" class="btn-sec">إلغاء</button>
+        </div>
+    </div>
+
+    <nav id="main-nav" style="display:none;">
+        <div class="tab on" onclick="nav('p-home', this)"><i>🏠</i>الرئيسية</div>
+        <div class="tab" onclick="nav('p-chat', this)"><i>💬</i>الدردشة</div>
+        <div class="tab" onclick="document.getElementById('post-file').click()"><div class="btn-round">+</div>نشر</div>
+        <div class="tab" onclick="nav('p-prof', this)"><i>👤</i>حسابي</div>
+    </nav>
+
+    <input type="file" id="post-file" hidden accept="image/*,video/*" onchange="handlePostFile(this)">
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAWN0UFdG1OeBAQ6d2IhMX4U4HduG-AiFU",
+            authDomain: "anime-kingdom-1d5ad.firebaseapp.com",
+            projectId: "anime-kingdom-1d5ad",
+            storageBucket: "anime-kingdom-1d5ad.firebasestorage.app",
+            messagingSenderId: "494305879884",
+            appId: "1:494305879884:web:7a6df06260bc17751911e9"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentUser = JSON.parse(localStorage.getItem('anime_user_v11'));
+        let selectedUserForLogin = null;
+
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('loader').style.display = 'none';
+                if(currentUser) startApp(); else showAuth('choice');
+            }, 2000); 
+        };
+
+        function showAuth(type) {
+            document.querySelectorAll('.auth-screen').forEach(s => s.style.display = 'none');
+            document.getElementById('auth-' + type).style.display = 'flex';
+        }
+
+        document.getElementById('pfp-inp').onchange = (e) => {
+            const r = new FileReader();
+            r.onload = (ev) => {
+                document.getElementById('pfp-pre').src = ev.target.result;
+                document.getElementById('pfp-pre').style.display = 'block';
+                document.getElementById('pfp-icon').style.display = 'none';
+            };
+            r.readAsDataURL(e.target.files[0]);
+        };
+
+        async function register() {
+            const name = document.getElementById('reg-name').value.trim();
+            const pass = document.getElementById('reg-pass').value.trim();
+            const img = document.getElementById('pfp-pre').src;
+            if(!name || !pass || !img.includes('base64')) return alert("أكمل بياناتك!");
+            const doc = await db.collection("users").add({ name, pass, img });
+            saveAndLogin({ id: doc.id, name, img, pass });
+        }
+
+        async function searchUsers(q) {
+            if(q.length < 1) return;
+            const snap = await db.collection("users").where("name", "==", q).get();
+            const res = document.getElementById('user-results');
+            res.innerHTML = '';
+            snap.forEach(doc => {
+                const u = doc.data();
+                const div = document.createElement('div');
+                div.className = 'user-item';
+                div.innerHTML = `<img src="${u.img}"> <span>${u.name}</span>`;
+                div.onclick = () => {
+                    selectedUserForLogin = {id: doc.id, ...u};
+                    document.getElementById('pass-area').style.display = 'block';
+                    document.getElementById('sel-name').innerText = u.name;
+                    res.innerHTML = '';
+                };
+                res.appendChild(div);
+            });
+        }
+
+        function login() {
+            const p = document.getElementById('login-pass').value;
+            if(selectedUserForLogin && selectedUserForLogin.pass === p) saveAndLogin(selectedUserForLogin);
+            else alert("خطأ!");
+        }
+
+        function saveAndLogin(u) {
+            localStorage.setItem('anime_user_v11', JSON.stringify(u));
+            location.reload();
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        function startApp() {
+            document.getElementById('main-nav').style.display = 'flex';
+            document.getElementById('p-home').classList.add('active');
+            document.getElementById('my-name').innerText = currentUser.name;
+            document.getElementById('my-img').src = currentUser.img;
+            sync();
+        }
+
+        function nav(id, el) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+            if(el) el.classList.add('on');
+        }
+
+        let tempFile = null;
+        function handlePostFile(input) {
+            const file = input.files[0]; if(!file) return;
+            const r = new FileReader();
+            r.onload = (e) => {
+                tempFile = { data: e.target.result, type: file.type };
+                document.getElementById('up-pre').innerHTML = file.type.startsWith('video') ? 
+                    `<video src="${e.target.result}" autoplay muted loop style="width:100%; height:100%; object-fit:cover;"></video>` : 
+                    `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+                document.getElementById('up-overlay').style.display = 'flex';
+            };
+            r.readAsDataURL(file);
+        }
+
+        async function publish() {
+            const btn = document.getElementById('up-btn'); btn.disabled = true;
+            await db.collection("posts").add({
+                uId: currentUser.id, uName: currentUser.name, uImg: currentUser.img,
+                txt: document.getElementById('up-txt').value, url: tempFile.data, type: tempFile.type,
+                likes: 0, time: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            location.reload();
+        }
+
+        function closeUp() { document.getElementById('up-overlay').style.display = 'none'; }
+
+        async function deletePost(id) {
+            if(confirm("حذف؟")) await db.collection("posts").doc(id).delete();
+        }
+
+        async function doLike(id) {
+            await db.collection("posts").doc(id).update({ likes: firebase.firestore.FieldValue.increment(1) });
+        }
+
+        function toggleComments(id) {
+            const box = document.getElementById(`cb-${id}`);
+            box.style.display = box.style.display === 'block' ? 'none' : 'block';
+            if(box.style.display === 'block') {
+                db.collection("posts").doc(id).collection("comments").orderBy("time","asc").onSnapshot(snap => {
+                    const list = document.getElementById(`cl-${id}`); list.innerHTML = "";
+                    snap.forEach(d => { list.innerHTML += `<div class="c-item"><b>${d.data().uName}:</b> ${d.data().text}</div>`; });
+                });
+            }
+        }
+
+        async function addComment(id) {
+            const inp = document.getElementById(`ci-${id}`); if(!inp.value.trim()) return;
+            await db.collection("posts").doc(id).collection("comments").add({
+                uName: currentUser.name, text: inp.value, time: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            inp.value = "";
+        }
+
+        function sync() {
+            db.collection("posts").orderBy("time", "desc").onSnapshot(snap => {
+                const fa = document.getElementById('f-all'), fm = document.getElementById('f-me');
+                let lCount = 0; fa.innerHTML = ''; fm.innerHTML = '';
+                snap.forEach(doc => {
+                    const p = doc.data(); const id = doc.id;
+                    const media = p.type.startsWith('video') ? `<video src="${p.url}" class="post-m" controls></video>` : `<img src="${p.url}" class="post-m">`;
+                    const del = p.uId === currentUser.id ? `<button class="delete-btn" onclick="deletePost('${id}')">🗑️</button>` : '';
+                    const h = `
+                        <div class="post">
+                            <div class="post-h"><img src="${p.uImg}"><b>${p.uName}</b>${del}</div>
+                            <div style="padding:10px;">${p.txt}</div>
+                            ${media}
+                            <div class="post-f">
+                                <button class="btn-act" onclick="doLike('${id}')">❤️ ${p.likes || 0}</button>
+                                <button class="btn-act" onclick="toggleComments('${id}')">💬 تعليق</button>
+                            </div>
+                            <div id="cb-${id}" class="c-section">
+                                <div id="cl-${id}" class="c-list"></div>
+                                <div style="display:flex; gap:5px;">
+                                    <input type="text" id="ci-${id}" class="inp" style="padding:8px; margin:0;" placeholder="أضف تعليق...">
+                                    <button class="btn-main" style="width:40px; padding:0;" onclick="addComment('${id}')">+</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    fa.innerHTML += h;
+                    if(p.uId === currentUser.id) { fm.innerHTML += h; lCount += (p.likes || 0); }
+                });
+                document.getElementById('total-likes').innerText = lCount;
+            });
+
+            db.collection("chat").orderBy("time", "asc").limitToLast(30).onSnapshot(snap => {
+                const cf = document.getElementById('chat-f'); cf.innerHTML = '';
+                snap.forEach(doc => {
+                    const m = doc.data(); const isMe = m.uId === currentUser.id;
+                    cf.innerHTML += `<div class="chat-msg ${isMe ? 'my-msg' : ''}"><img src="${m.img}"><div class="msg-c">${m.text}</div></div>`;
+                });
+                cf.scrollTop = cf.scrollHeight;
+            });
+        }
+
+        async function sendMsg() {
+            const i = document.getElementById('msg-inp'); if(!i.value.trim()) return;
+            await db.collection("chat").add({ uId: currentUser.id, img: currentUser.img, text: i.value, time: firebase.firestore.FieldValue.serverTimestamp() });
+            i.value = '';
+        }
+    </script>
+</body>
+                  </html>
+
